@@ -204,7 +204,28 @@ export default function App() {
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
-    showNotification('Data exported successfully.');
+    showNotification('JSON backup exported successfully.');
+  };
+
+  const exportDataXLS = () => {
+    if (!window.XLSX) {
+      showNotification('Excel library is still loading. Please try again.');
+      return;
+    }
+    
+    const wb = window.XLSX.utils.book_new();
+    
+    // Project Info Sheet
+    const wsProject = window.XLSX.utils.json_to_sheet([projectInfo]);
+    window.XLSX.utils.book_append_sheet(wb, wsProject, "Project Info");
+    
+    // Records Sheet
+    const wsRecords = window.XLSX.utils.json_to_sheet(records);
+    window.XLSX.utils.book_append_sheet(wb, wsRecords, "Monthly Data");
+    
+    // Save
+    window.XLSX.writeFile(wb, `Carbon_Inventory_${projectInfo.contractNo.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`);
+    showNotification('Data exported as Excel successfully.');
   };
 
   const handleFileUpload = (e) => {
@@ -366,9 +387,16 @@ export default function App() {
             <button 
               onClick={exportData}
               className="flex items-center gap-2 bg-emerald-800/50 hover:bg-emerald-600 px-3 py-2 rounded-md transition-colors text-sm font-medium border border-emerald-600/50"
-              title="Export Data"
+              title="Export JSON Backup"
             >
-              <Download className="h-4 w-4" />
+              <Download className="h-4 w-4" /> JSON
+            </button>
+            <button 
+              onClick={exportDataXLS}
+              className="flex items-center gap-2 bg-emerald-800/50 hover:bg-emerald-600 px-3 py-2 rounded-md transition-colors text-sm font-medium border border-emerald-600/50"
+              title="Export as Excel"
+            >
+              <Download className="h-4 w-4" /> XLS
             </button>
             <button 
               onClick={() => setIsAuthenticated(false)}
