@@ -38,23 +38,41 @@ const INITIAL_PROJECT_INFO = {
   worksCompletion: ''
 };
 
+// Expanded to match the EXACT fields from the original Excel File
 const INITIAL_FORM_DATA = {
   monthYear: '',
   // Materials
   soilNailSteel: '',
   soilNailGrout: '',
   massConcrete: '',
+  namiConcrete: '',
+  noFineConcrete: '',
+  cementGroutBackfill: '',
   reinforcedConcrete: '',
   steelRebar: '',
-  // Site Operations
+  recompactingSoil: '',
+  // Site Operations (Energy & Utilities)
   diesel: '',
   biofuel: '',
+  biofuelGrade: '',
   electricity: '',
+  bessElectricity: '',
   water: '',
-  // Waste & Transport
-  wasteWeight: '',
-  wasteDistance: '',
+  // Waste Disposal Stream 1
+  waste1Trips: '',
+  waste1Location: '',
+  waste1Distance: '',
+  waste1Weight: '',
+  // Waste Disposal Stream 2
+  waste2Trips: '',
+  waste2Location: '',
+  waste2Distance: '',
+  waste2Weight: '',
+  // Vehicles & Personnel
+  contractCarsNonElectric: '',
   petrol: '',
+  contractCarsElectric: '',
+  evElectricity: '',
   labourCount: ''
 };
 
@@ -79,7 +97,6 @@ export default function App() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    // Dynamically load SheetJS for reading Excel files
     if (!window.XLSX) {
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -89,17 +106,9 @@ export default function App() {
 
     const initAuth = async () => {
       if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        try {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } catch (e) {
-          console.error("Auth error:", e);
-        }
+        await signInWithCustomToken(auth, __initial_auth_token);
       } else {
-        try {
-          await signInAnonymously(auth);
-        } catch (e) {
-          console.error("Auth error:", e);
-        }
+        await signInAnonymously(auth);
       }
     };
     initAuth();
@@ -110,28 +119,24 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    try {
-      const projectInfoRef = doc(db, 'artifacts', appId, 'public', 'data', 'projectInfo', 'main');
-      const unsubProjectInfo = onSnapshot(projectInfoRef, (docSnap) => {
-        if (docSnap.exists()) {
-          setProjectInfo(docSnap.data());
-        }
-      }, (error) => console.error("Error fetching project info:", error));
+    const projectInfoRef = doc(db, 'artifacts', appId, 'public', 'data', 'projectInfo', 'main');
+    const unsubProjectInfo = onSnapshot(projectInfoRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setProjectInfo(docSnap.data());
+      }
+    }, (error) => console.error("Error fetching project info:", error));
 
-      const recordsRef = collection(db, 'artifacts', appId, 'public', 'data', 'records');
-      const unsubRecords = onSnapshot(recordsRef, (snapshot) => {
-        const fetchedRecords = [];
-        snapshot.forEach((d) => fetchedRecords.push(d.data()));
-        setRecords(fetchedRecords.sort((a, b) => a.monthYear.localeCompare(b.monthYear)));
-      }, (error) => console.error("Error fetching records:", error));
+    const recordsRef = collection(db, 'artifacts', appId, 'public', 'data', 'records');
+    const unsubRecords = onSnapshot(recordsRef, (snapshot) => {
+      const fetchedRecords = [];
+      snapshot.forEach((d) => fetchedRecords.push(d.data()));
+      setRecords(fetchedRecords.sort((a, b) => a.monthYear.localeCompare(b.monthYear)));
+    }, (error) => console.error("Error fetching records:", error));
 
-      return () => {
-        unsubProjectInfo();
-        unsubRecords();
-      };
-    } catch (error) {
-      console.error("Firestore setup error:", error);
-    }
+    return () => {
+      unsubProjectInfo();
+      unsubRecords();
+    };
   }, [user]);
 
   const handleProjectInfoChange = (e) => {
@@ -187,7 +192,9 @@ export default function App() {
   };
 
   const editRecord = (record) => {
-    setFormData(record);
+    // Fill in missing default keys for older records that didn't have all expanded fields
+    const fullRecord = { ...INITIAL_FORM_DATA, ...record };
+    setFormData(fullRecord);
     setIsModalOpen(true);
   };
 
@@ -199,33 +206,77 @@ export default function App() {
     
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObject, null, 2));
     const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href",     dataStr);
+    downloadAnchorNode.setAttribute("href", dataStr);
     downloadAnchorNode.setAttribute("download", `Carbon_Inventory_${projectInfo.contractNo.replace(/[^a-zA-Z0-9]/g, '_')}.json`);
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
-    showNotification('JSON backup exported successfully.');
+    showNotification('Data exported successfully.');
   };
 
-  const exportDataXLS = () => {
+  const exportToExcel = () => {
     if (!window.XLSX) {
-      showNotification('Excel library is still loading. Please try again.');
+      showNotification('Excel library is still loading. Please try again in a few seconds.');
       return;
     }
-    
+
+    // Sheet 1: Project Information
+    const wsInfoData = [
+      ['General Project Information'],
+      [],
+      ['Agreement No.', 'CE 53/2022 (GE)'],
+      ['Contract No.', projectInfo.contractNo],
+      ['Man-made Feature No.', projectInfo.featureNo],
+      ['Natural Hillside Catchment No.', projectInfo.catchmentNo],
+      ['Site Address', projectInfo.siteAddress],
+      ['Works Beginning', projectInfo.worksBeginning],
+      ['Works Completion', projectInfo.worksCompletion]
+    ];
+    const wsInfo = window.XLSX.utils.aoa_to_sheet(wsInfoData);
+
+    // Sheet 2: Monthly Data (Flattened for easy viewing)
+    const formattedRecords = records.map(r => ({
+      'Month / Year': r.monthYear,
+      'Solid Steel Bar (kg)': Number(r.soilNailSteel || 0),
+      'Cement Grout (kg)': Number(r.soilNailGrout || 0),
+      'Mass Concrete (m³)': Number(r.massConcrete || 0),
+      'Nami Concrete (m³)': Number(r.namiConcrete || 0),
+      'No-fine Concrete (m³)': Number(r.noFineConcrete || 0),
+      'Cement Grout Backfill (m³/kg)': Number(r.cementGroutBackfill || 0),
+      'Reinforced Concrete (m³)': Number(r.reinforcedConcrete || 0),
+      'Steel Rebar (kg)': Number(r.steelRebar || 0),
+      'Recompacting Soil (m³)': Number(r.recompactingSoil || 0),
+      'Diesel Fuel (L)': Number(r.diesel || 0),
+      'Biofuel (L)': Number(r.biofuel || 0),
+      'Biofuel Grade': r.biofuelGrade || '',
+      'Grid Electricity (kWh)': Number(r.electricity || 0),
+      'BESS Electricity (kWh)': Number(r.bessElectricity || 0),
+      'Fresh Water (L)': Number(r.water || 0),
+      'Waste Stream 1 - Trips': Number(r.waste1Trips || 0),
+      'Waste Stream 1 - Location': r.waste1Location || '',
+      'Waste Stream 1 - Distance (km)': Number(r.waste1Distance || 0),
+      'Waste Stream 1 - Weight (kg)': Number(r.waste1Weight || 0),
+      'Waste Stream 2 - Trips': Number(r.waste2Trips || 0),
+      'Waste Stream 2 - Location': r.waste2Location || '',
+      'Waste Stream 2 - Distance (km)': Number(r.waste2Distance || 0),
+      'Waste Stream 2 - Weight (kg)': Number(r.waste2Weight || 0),
+      'Non-Electric Contract Cars': Number(r.contractCarsNonElectric || 0),
+      'Petrol (L)': Number(r.petrol || 0),
+      'Electric Contract Cars': Number(r.contractCarsElectric || 0),
+      'EV Electricity (kWh)': Number(r.evElectricity || 0),
+      'Average Labour per Day': Number(r.labourCount || 0)
+    }));
+
+    const wsData = window.XLSX.utils.json_to_sheet(formattedRecords);
+
+    // Create workbook and append sheets
     const wb = window.XLSX.utils.book_new();
-    
-    // Project Info Sheet
-    const wsProject = window.XLSX.utils.json_to_sheet([projectInfo]);
-    window.XLSX.utils.book_append_sheet(wb, wsProject, "Project Info");
-    
-    // Records Sheet
-    const wsRecords = window.XLSX.utils.json_to_sheet(records);
-    window.XLSX.utils.book_append_sheet(wb, wsRecords, "Monthly Data");
-    
-    // Save
+    window.XLSX.utils.book_append_sheet(wb, wsInfo, "Project Info");
+    window.XLSX.utils.book_append_sheet(wb, wsData, "Monthly Data");
+
+    // Trigger download
     window.XLSX.writeFile(wb, `Carbon_Inventory_${projectInfo.contractNo.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`);
-    showNotification('Data exported as Excel successfully.');
+    showNotification('Excel data exported successfully.');
   };
 
   const handleFileUpload = (e) => {
@@ -234,20 +285,15 @@ export default function App() {
 
     const fileExt = file.name.split('.').pop().toLowerCase();
 
-    // 1. Handle JSON Backup Uploads
     if (fileExt === 'json') {
       const reader = new FileReader();
       reader.onload = async (evt) => {
         try {
           const data = JSON.parse(evt.target.result);
-          
           if (data.projectInformation) {
             setProjectInfo(data.projectInformation);
-            if (user) {
-              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projectInfo', 'main'), data.projectInformation);
-            }
+            if (user) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projectInfo', 'main'), data.projectInformation);
           }
-          
           if (data.monthlyData && Array.isArray(data.monthlyData)) {
             if (user) {
               for (const rec of data.monthlyData) {
@@ -262,9 +308,7 @@ export default function App() {
         }
       };
       reader.readAsText(file);
-    } 
-    // 2. Handle Raw Excel/CSV Uploads (Extracts Project Info headers)
-    else if (['xlsx', 'xls', 'csv'].includes(fileExt)) {
+    } else if (['xlsx', 'xls', 'csv'].includes(fileExt)) {
       if (!window.XLSX) {
         showNotification('Excel parser is still loading. Please try again in a few seconds.');
         return;
@@ -281,7 +325,6 @@ export default function App() {
           
           const newInfo = { ...projectInfo };
           
-          // Scan first 20 rows to extract standard project info based on the provided XLS layout
           for (let i = 0; i < Math.min(20, data.length); i++) {
             const row = data[i];
             if (!row || !row[0]) continue;
@@ -313,7 +356,6 @@ export default function App() {
       showNotification('Unsupported file. Please upload .xls, .xlsx, .csv, or .json');
     }
 
-    // Reset input
     e.target.value = null;
   };
 
@@ -369,7 +411,6 @@ export default function App() {
             
             <div className="w-px h-6 bg-emerald-600/50 mx-1 hidden sm:block"></div>
             
-            {/* Hidden file input for import */}
             <input 
               type="file" 
               accept=".json, .xlsx, .xls, .csv" 
@@ -385,18 +426,18 @@ export default function App() {
               <Upload className="h-4 w-4" />
             </button>
             <button 
+              onClick={exportToExcel}
+              className="flex items-center gap-2 bg-emerald-800/50 hover:bg-emerald-600 px-3 py-2 rounded-md transition-colors text-sm font-medium border border-emerald-600/50"
+              title="Export to Excel"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+            </button>
+            <button 
               onClick={exportData}
               className="flex items-center gap-2 bg-emerald-800/50 hover:bg-emerald-600 px-3 py-2 rounded-md transition-colors text-sm font-medium border border-emerald-600/50"
               title="Export JSON Backup"
             >
-              <Download className="h-4 w-4" /> JSON
-            </button>
-            <button 
-              onClick={exportDataXLS}
-              className="flex items-center gap-2 bg-emerald-800/50 hover:bg-emerald-600 px-3 py-2 rounded-md transition-colors text-sm font-medium border border-emerald-600/50"
-              title="Export as Excel"
-            >
-              <Download className="h-4 w-4" /> XLS
+              <Download className="h-4 w-4" />
             </button>
             <button 
               onClick={() => setIsAuthenticated(false)}
@@ -412,7 +453,6 @@ export default function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto p-4 py-8 space-y-8">
         
-        {/* Notification Toast */}
         {notification && (
           <div className="fixed top-20 right-4 bg-slate-800 text-white px-6 py-3 rounded-md shadow-lg z-50 animate-fade-in flex items-center gap-2 border border-slate-700">
             <div className="h-2 w-2 bg-emerald-400 rounded-full animate-pulse"></div>
@@ -471,10 +511,10 @@ export default function App() {
                     <thead className="bg-slate-50 text-slate-600">
                       <tr>
                         <th className="px-6 py-3 text-left font-semibold">Month</th>
-                        <th className="px-6 py-3 text-left font-semibold">Concrete (m³)</th>
-                        <th className="px-6 py-3 text-left font-semibold">Steel/Rebar (kg)</th>
-                        <th className="px-6 py-3 text-left font-semibold">Diesel (L)</th>
-                        <th className="px-6 py-3 text-left font-semibold">Electricity (kWh)</th>
+                        <th className="px-6 py-3 text-left font-semibold">Total Concrete (m³)</th>
+                        <th className="px-6 py-3 text-left font-semibold">Total Steel (kg)</th>
+                        <th className="px-6 py-3 text-left font-semibold">Diesel & Biofuel (L)</th>
+                        <th className="px-6 py-3 text-left font-semibold">Total Electricity (kWh)</th>
                         <th className="px-6 py-3 text-right font-semibold">Actions</th>
                       </tr>
                     </thead>
@@ -483,13 +523,13 @@ export default function App() {
                         <tr key={record.monthYear} className="hover:bg-slate-50 transition-colors">
                           <td className="px-6 py-4 font-medium text-slate-900">{record.monthYear}</td>
                           <td className="px-6 py-4">
-                            {(Number(record.massConcrete || 0) + Number(record.reinforcedConcrete || 0)).toFixed(2)}
+                            {(Number(record.massConcrete || 0) + Number(record.reinforcedConcrete || 0) + Number(record.namiConcrete || 0) + Number(record.noFineConcrete || 0)).toFixed(2)}
                           </td>
                           <td className="px-6 py-4">
                             {(Number(record.soilNailSteel || 0) + Number(record.steelRebar || 0)).toFixed(2)}
                           </td>
-                          <td className="px-6 py-4">{record.diesel || '-'}</td>
-                          <td className="px-6 py-4">{record.electricity || '-'}</td>
+                          <td className="px-6 py-4">{(Number(record.diesel || 0) + Number(record.biofuel || 0)).toFixed(2)}</td>
+                          <td className="px-6 py-4">{(Number(record.electricity || 0) + Number(record.bessElectricity || 0) + Number(record.evElectricity || 0)).toFixed(2)}</td>
                           <td className="px-6 py-4 text-right">
                             <button onClick={() => editRecord(record)} className="text-blue-600 hover:text-blue-800 font-medium mr-4">Edit</button>
                             <button onClick={() => deleteRecord(record.monthYear)} className="text-red-600 hover:text-red-800 font-medium">Delete</button>
@@ -505,10 +545,10 @@ export default function App() {
         )}
       </main>
 
-      {/* Data Entry Modal */}
+      {/* Expanded Data Entry Modal */}
       {isModalOpen && currentView === 'entry' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in-up">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in-up">
             
             {/* Modal Header */}
             <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center sticky top-0 z-10">
@@ -540,18 +580,32 @@ export default function App() {
                 {activeTab === 'materials' && (
                   <div className="space-y-8 animate-fade-in">
                     <div>
-                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Soil Nails & Ground Investigation</h3>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Soil Nails</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <InputField label="Solid Steel Bar Weight (kg)" name="soilNailSteel" type="number" value={formData.soilNailSteel} onChange={handleFormChange} />
                         <InputField label="Cement Grout Weight (kg)" name="soilNailGrout" type="number" value={formData.soilNailGrout} onChange={handleFormChange} />
                       </div>
                     </div>
                     <div>
-                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Concrete & Rebar</h3>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Concrete & Cementitious Materials</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Mass Concrete (m³)" name="massConcrete" type="number" value={formData.massConcrete} onChange={handleFormChange} />
+                        <InputField label="Mass Concrete Backfilling (m³)" name="massConcrete" type="number" value={formData.massConcrete} onChange={handleFormChange} />
+                        <InputField label="Nami Self-Compacting Material Backfilling (m³)" name="namiConcrete" type="number" value={formData.namiConcrete} onChange={handleFormChange} />
+                        <InputField label="No-fine Concrete (m³)" name="noFineConcrete" type="number" value={formData.noFineConcrete} onChange={handleFormChange} />
+                        <InputField label="Cement Grout Backfilling (m³/kg)" name="cementGroutBackfill" type="number" value={formData.cementGroutBackfill} onChange={handleFormChange} />
                         <InputField label="Reinforced Concrete (m³)" name="reinforcedConcrete" type="number" value={formData.reinforcedConcrete} onChange={handleFormChange} />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Steel & Rebar</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <InputField label="Steel Rebar Weight (kg)" name="steelRebar" type="number" value={formData.steelRebar} onChange={handleFormChange} />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Earthworks</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <InputField label="Recompacting Existing Excavated Soil (m³)" name="recompactingSoil" type="number" value={formData.recompactingSoil} onChange={handleFormChange} />
                       </div>
                     </div>
                   </div>
@@ -560,11 +614,18 @@ export default function App() {
                 {activeTab === 'operations' && (
                   <div className="space-y-8 animate-fade-in">
                     <div>
-                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Site Operation Consumptions</h3>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Fuel Consumptions</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <InputField label="Diesel Fuel (Litre)" name="diesel" type="number" value={formData.diesel} onChange={handleFormChange} />
                         <InputField label="Biofuel - B10 or higher (Litre)" name="biofuel" type="number" value={formData.biofuel} onChange={handleFormChange} />
+                        <InputField label="Grade of Biofuel (Specify)" name="biofuelGrade" type="text" value={formData.biofuelGrade} onChange={handleFormChange} placeholder="e.g. B100" />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Electricity & Water Consumptions</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <InputField label="Grid Electricity (kWh)" name="electricity" type="number" value={formData.electricity} onChange={handleFormChange} />
+                        <InputField label="Electricity via BESS (kWh)" name="bessElectricity" type="number" value={formData.bessElectricity} onChange={handleFormChange} />
                         <InputField label="Fresh Water (Litre)" name="water" type="number" value={formData.water} onChange={handleFormChange} />
                       </div>
                     </div>
@@ -574,17 +635,36 @@ export default function App() {
                 {activeTab === 'transport' && (
                   <div className="space-y-8 animate-fade-in">
                     <div>
-                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Waste Disposal</h3>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Waste Disposal (Stream 1)</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Total Waste Weight (kg)" name="wasteWeight" type="number" value={formData.wasteWeight} onChange={handleFormChange} />
-                        <InputField label="Average Distance to Disposal (km)" name="wasteDistance" type="number" value={formData.wasteDistance} onChange={handleFormChange} />
+                        <InputField label="Total no. of trips" name="waste1Trips" type="number" value={formData.waste1Trips} onChange={handleFormChange} />
+                        <InputField label="Location of disposal" name="waste1Location" type="text" value={formData.waste1Location} onChange={handleFormChange} />
+                        <InputField label="Travel distance to site (km)" name="waste1Distance" type="number" value={formData.waste1Distance} onChange={handleFormChange} />
+                        <InputField label="Total weight (kg)" name="waste1Weight" type="number" value={formData.waste1Weight} onChange={handleFormChange} />
                       </div>
                     </div>
                     <div>
-                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Transportation & Personnel</h3>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Waste Disposal (Stream 2)</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Contract Cars Petrol (Litre)" name="petrol" type="number" value={formData.petrol} onChange={handleFormChange} />
-                        <InputField label="Average Labour on Site per Day" name="labourCount" type="number" value={formData.labourCount} onChange={handleFormChange} />
+                        <InputField label="Total no. of trips" name="waste2Trips" type="number" value={formData.waste2Trips} onChange={handleFormChange} />
+                        <InputField label="Location of disposal" name="waste2Location" type="text" value={formData.waste2Location} onChange={handleFormChange} />
+                        <InputField label="Travel distance to site (km)" name="waste2Distance" type="number" value={formData.waste2Distance} onChange={handleFormChange} />
+                        <InputField label="Total weight (kg)" name="waste2Weight" type="number" value={formData.waste2Weight} onChange={handleFormChange} />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Contract Vehicles</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <InputField label="No. of Non-Electric Contract Cars" name="contractCarsNonElectric" type="number" value={formData.contractCarsNonElectric} onChange={handleFormChange} />
+                        <InputField label="Consumption of Petrol (Litre)" name="petrol" type="number" value={formData.petrol} onChange={handleFormChange} />
+                        <InputField label="No. of Electric Contract Cars" name="contractCarsElectric" type="number" value={formData.contractCarsElectric} onChange={handleFormChange} />
+                        <InputField label="Electric Consumption (kWh)" name="evElectricity" type="number" value={formData.evElectricity} onChange={handleFormChange} />
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Site Personnel</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <InputField label="Average no. of labour on site per day" name="labourCount" type="number" value={formData.labourCount} onChange={handleFormChange} />
                       </div>
                     </div>
                   </div>
@@ -750,15 +830,15 @@ function LoginScreen({ onLogin, showNotification, notification }) {
 
 function AnalysisDashboard({ records }) {
   const totals = records.reduce((acc, curr) => {
-    acc.concrete += Number(curr.massConcrete || 0) + Number(curr.reinforcedConcrete || 0);
+    acc.concrete += Number(curr.massConcrete || 0) + Number(curr.reinforcedConcrete || 0) + Number(curr.namiConcrete || 0) + Number(curr.noFineConcrete || 0);
     acc.steel += Number(curr.soilNailSteel || 0) + Number(curr.steelRebar || 0);
-    acc.electricity += Number(curr.electricity || 0);
+    acc.electricity += Number(curr.electricity || 0) + Number(curr.bessElectricity || 0) + Number(curr.evElectricity || 0);
     acc.diesel += Number(curr.diesel || 0);
     acc.petrol += Number(curr.petrol || 0);
     return acc;
   }, { concrete: 0, steel: 0, electricity: 0, diesel: 0, petrol: 0 });
 
-  const maxConcrete = Math.max(...records.map(r => Number(r.massConcrete || 0) + Number(r.reinforcedConcrete || 0)), 1);
+  const maxConcrete = Math.max(...records.map(r => Number(r.massConcrete || 0) + Number(r.reinforcedConcrete || 0) + Number(r.namiConcrete || 0) + Number(r.noFineConcrete || 0)), 1);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -769,17 +849,17 @@ function AnalysisDashboard({ records }) {
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatCard title="Total Concrete" value={totals.concrete.toFixed(2)} unit="m³" color="bg-blue-50 text-blue-700 border-blue-200" />
+          <StatCard title="Total Concrete (All Types)" value={totals.concrete.toFixed(2)} unit="m³" color="bg-blue-50 text-blue-700 border-blue-200" />
           <StatCard title="Total Steel & Rebar" value={totals.steel.toFixed(2)} unit="kg" color="bg-slate-50 text-slate-700 border-slate-200" />
           <StatCard title="Total Fuel (Diesel+Petrol)" value={(totals.diesel + totals.petrol).toFixed(2)} unit="Litres" color="bg-orange-50 text-orange-700 border-orange-200" />
-          <StatCard title="Total Electricity" value={totals.electricity.toFixed(2)} unit="kWh" color="bg-yellow-50 text-yellow-700 border-yellow-200" />
+          <StatCard title="Total Electricity (Grid+BESS+EV)" value={totals.electricity.toFixed(2)} unit="kWh" color="bg-yellow-50 text-yellow-700 border-yellow-200" />
         </div>
 
         <h3 className="text-lg font-semibold text-slate-700 mb-4">Concrete Usage Trend</h3>
         {records.length > 0 ? (
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 pt-10 flex items-end gap-2 h-64 overflow-x-auto">
             {records.map((record) => {
-              const val = Number(record.massConcrete || 0) + Number(record.reinforcedConcrete || 0);
+              const val = Number(record.massConcrete || 0) + Number(record.reinforcedConcrete || 0) + Number(record.namiConcrete || 0) + Number(record.noFineConcrete || 0);
               const heightPercent = Math.max((val / maxConcrete) * 100, 5);
               return (
                 <div key={record.monthYear} className="flex flex-col items-center flex-1 min-w-[60px] group">
@@ -855,12 +935,10 @@ function TabButton({ active, onClick, icon, label }) {
 }
 
 function ForecastingDashboard() {
-  // Project Base Parameters
-  const [budget, setBudget] = useState(120); // HKD Millions
-  const [duration, setDuration] = useState(24); // Months
-  const [complexity, setComplexity] = useState(1.1); // Multiplier
+  const [budget, setBudget] = useState(120); 
+  const [duration, setDuration] = useState(24); 
+  const [complexity, setComplexity] = useState(1.1); 
   
-  // Decarbonisation Granular Parameters (0-100%)
   const [measures, setMeasures] = useState({
     bess: 10,
     biofuel: 20,
@@ -873,14 +951,10 @@ function ForecastingDashboard() {
     setMeasures(prev => ({ ...prev, [key]: Number(value) }));
   };
 
-  // AS04 Scope 2.4 Calculation Engine (Simulated)
-  // Base intensity: ~14.5 tCO2e per HK$M, multiplied by complexity factor and duration drift.
   const durationFactor = 1 + ((duration - 24) * 0.005); 
   const baselineIntensity = 14.5 * complexity * durationFactor;
   const baselineEmissions = budget * baselineIntensity;
 
-  // AS04 Scope 2.6: Granular Mitigations
-  // Max theoretical reduction % per category:
   const rBess = (measures.bess / 100) * 8.5; 
   const rBio = (measures.biofuel / 100) * 5.2; 
   const rConcrete = (measures.lowCarbonConcrete / 100) * 15.0; 
@@ -890,18 +964,14 @@ function ForecastingDashboard() {
   const reductionPercentage = rBess + rBio + rConcrete + rEV + rSteel;
   const reductionAmount = baselineEmissions * (reductionPercentage / 100);
   
-  // AS04 Scope 2.7: Output Target Formulation
   const forecastedEmissions = baselineEmissions - reductionAmount; 
 
-  // AI Confidence Telemetry (Visual flavor)
   const dataPoints = 14500 + Math.floor(Math.random() * 100);
   const confidence = Math.max(85, 98 - (budget / 50) - Math.abs(complexity - 1) * 10).toFixed(1);
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        
-        {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
           <div>
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -913,7 +983,6 @@ function ForecastingDashboard() {
             </p>
           </div>
           
-          {/* AI Telemetry Badge */}
           <div className="flex gap-4 items-center bg-slate-900 rounded-lg p-3 border border-slate-700 shadow-inner">
             <div className="flex flex-col">
               <span className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold flex items-center gap-1">
@@ -930,8 +999,6 @@ function ForecastingDashboard() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-          
-          {/* Left Column: Project Baseline Parameters */}
           <div className="xl:col-span-4 space-y-6 bg-slate-50 p-5 rounded-xl border border-slate-200 shadow-sm">
             <h3 className="text-md font-semibold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3">
               <Settings2 className="h-5 w-5 text-slate-500" />
@@ -980,7 +1047,6 @@ function ForecastingDashboard() {
             </div>
           </div>
 
-          {/* Middle Column: Mitigation Tuning */}
           <div className="xl:col-span-5 space-y-6">
             <h3 className="text-md font-semibold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3">
               <Sliders className="h-5 w-5 text-emerald-600" />
@@ -1011,7 +1077,6 @@ function ForecastingDashboard() {
             </div>
           </div>
 
-          {/* Right Column: Target Outputs */}
           <div className="xl:col-span-3 space-y-6">
             <h3 className="text-md font-semibold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3">
               <Target className="h-5 w-5 text-emerald-600" />
@@ -1019,7 +1084,6 @@ function ForecastingDashboard() {
             </h3>
             
             <div className="bg-emerald-900 p-6 rounded-xl text-white shadow-lg relative overflow-hidden">
-              {/* Decorative background element */}
               <div className="absolute -right-6 -top-6 opacity-10">
                 <Target className="h-32 w-32" />
               </div>
@@ -1046,7 +1110,6 @@ function ForecastingDashboard() {
               </div>
             </div>
 
-            {/* Gauge visualizer */}
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-xs font-semibold text-slate-500 uppercase">Target Aggressiveness</span>
@@ -1064,7 +1127,6 @@ function ForecastingDashboard() {
   );
 }
 
-// Sub-component for Forecasting Dashboard Sliders
 function RangeRow({ label, desc, value, maxReduction, currentReduction, onChange }) {
   return (
     <div className="bg-white p-3 rounded border border-slate-100 shadow-sm hover:border-emerald-200 transition-colors">
