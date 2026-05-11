@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInWithCustomToken, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { 
   Leaf, 
@@ -87,23 +87,14 @@ export default function App() {
       document.head.appendChild(script);
     }
 
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        try {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } catch (e) {
-          console.error("Auth error:", e);
-        }
-      } else {
-        try {
-          await signInAnonymously(auth);
-        } catch (e) {
-          console.error("Auth error:", e);
-        }
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
+    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+      signInWithCustomToken(auth, __initial_auth_token).catch(e => console.error("Auth error:", e));
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsAuthenticated(!!currentUser);
+    });
     return () => unsubscribe();
   }, []);
 
@@ -318,7 +309,7 @@ export default function App() {
   };
 
   if (!isAuthenticated) {
-    return <LoginScreen onLogin={() => setIsAuthenticated(true)} showNotification={showNotification} notification={notification} />;
+    return <LoginScreen showNotification={showNotification} notification={notification} />;
   }
 
   return (
@@ -399,7 +390,7 @@ export default function App() {
               <Download className="h-4 w-4" /> XLS
             </button>
             <button 
-              onClick={() => setIsAuthenticated(false)}
+              onClick={() => signOut(auth)}
               className="flex items-center gap-2 bg-red-500/90 hover:bg-red-500 px-3 py-2 rounded-md transition-colors text-sm font-medium border border-red-500/50 ml-1 shadow-sm"
               title="Logout"
             >
@@ -649,37 +640,20 @@ export default function App() {
 }
 
 // Sub-components
-function LoginScreen({ onLogin, showNotification, notification }) {
-  const [username, setUsername] = useState('');
+function LoginScreen({ showNotification, notification }) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  const hashString = async (message) => {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     
     try {
-      const userHash = await hashString(username);
-      const passHash = await hashString(password);
-      
-      // "admin" / "123"
-      if (
-        userHash === '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918' && 
-        passHash === 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3'
-      ) {
-        onLogin();
-      } else {
-        showNotification('Invalid username or password');
-      }
+      await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
-      showNotification('Login error occurred');
+      console.error(error);
+      showNotification('Invalid email or password');
     }
     setIsLoading(false);
   };
@@ -702,17 +676,17 @@ function LoginScreen({ onLogin, showNotification, notification }) {
         
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <User className="h-5 w-5 text-slate-400" />
               </div>
               <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm bg-slate-50"
-                placeholder="Enter username"
+                placeholder="Enter email"
                 required
               />
             </div>
