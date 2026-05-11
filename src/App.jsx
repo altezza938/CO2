@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { 
   Leaf, 
@@ -87,14 +87,23 @@ export default function App() {
       document.head.appendChild(script);
     }
 
-    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-      signInWithCustomToken(auth, __initial_auth_token).catch(e => console.error("Auth error:", e));
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setIsAuthenticated(!!currentUser);
-    });
+    const initAuth = async () => {
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        try {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } catch (e) {
+          console.error("Auth error:", e);
+        }
+      } else {
+        try {
+          await signInAnonymously(auth);
+        } catch (e) {
+          console.error("Auth error:", e);
+        }
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
 
@@ -309,7 +318,7 @@ export default function App() {
   };
 
   if (!isAuthenticated) {
-    return <LoginScreen showNotification={showNotification} notification={notification} />;
+    return <LoginScreen onLogin={() => setIsAuthenticated(true)} showNotification={showNotification} notification={notification} />;
   }
 
   return (
@@ -390,7 +399,7 @@ export default function App() {
               <Download className="h-4 w-4" /> XLS
             </button>
             <button 
-              onClick={() => signOut(auth)}
+              onClick={() => setIsAuthenticated(false)}
               className="flex items-center gap-2 bg-red-500/90 hover:bg-red-500 px-3 py-2 rounded-md transition-colors text-sm font-medium border border-red-500/50 ml-1 shadow-sm"
               title="Logout"
             >
@@ -640,22 +649,37 @@ export default function App() {
 }
 
 // Sub-components
-function LoginScreen({ showNotification, notification }) {
+function LoginScreen({ onLogin, showNotification, notification }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const hashString = async (message) => {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     
     try {
-      // Append a dummy domain so Firebase accepts it as an email if it's a simple username
-      const authEmail = username.includes('@') ? username : `${username}@system.local`;
-      await signInWithEmailAndPassword(auth, authEmail, password);
+      const userHash = await hashString(username);
+      const passHash = await hashString(password);
+      
+      // "admin" / "123"
+      if (
+        userHash === '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918' && 
+        passHash === 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3'
+      ) {
+        onLogin();
+      } else {
+        showNotification('Invalid username or password');
+      }
     } catch (error) {
-      console.error(error);
-      showNotification('Invalid username or password');
+      showNotification('Login error occurred');
     }
     setIsLoading(false);
   };
