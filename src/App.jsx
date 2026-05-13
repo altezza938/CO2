@@ -41,21 +41,21 @@ const INITIAL_PROJECT_INFO = {
 // Expanded to match the EXACT fields from the original Excel File
 
 export const WORK_CATEGORIES = [
-  { id: 'cat1', name: '1. Site Clearance' },
-  { id: 'cat2', name: '2. Earthworks' },
-  { id: 'cat3', name: '3. Soil Nails' },
-  { id: 'cat4', name: '4. Rock Dowels / Bolts' },
-  { id: 'cat5', name: '5. Retaining Walls' },
-  { id: 'cat6', name: '6. Skin Walls' },
-  { id: 'cat7', name: '7. Raft Foundations' },
-  { id: 'cat8', name: '8. Flexible Debris Resisting Barriers' },
-  { id: 'cat9', name: '9. Rigid Debris Resisting Barriers' },
-  { id: 'cat10', name: '10. Surface Drainage' },
-  { id: 'cat11', name: '11. Sub-surface Drainage' },
-  { id: 'cat12', name: '12. Rockfall Mitigation' },
-  { id: 'cat13', name: '13. Bio-engineering / Landscaping' },
-  { id: 'trial1', name: 'Site Trial 1: GFRP Soil Nail' },
-  { id: 'trial2', name: 'Site Trial 2: Skin Wall with GGBS Concrete' }
+  { id: 'cat1', name: '1. Soil Nails', group: 'major' },
+  { id: 'cat2', name: '2. Rock Dowels / Rock Bolts', group: 'major' },
+  { id: 'cat3', name: '3. Buttresses', group: 'major' },
+  { id: 'cat4', name: '4. Rock Dentition', group: 'major' },
+  { id: 'cat5', name: '5. Fill Slopes', group: 'major' },
+  { id: 'cat6', name: '6. Wall Thickening / Skin Walls', group: 'major' },
+  { id: 'cat7', name: '7. Retaining Walls', group: 'major' },
+  { id: 'cat8', name: '8. Rigid Barriers', group: 'major' },
+  { id: 'cat9', name: '9. Flexible Barriers', group: 'major' },
+  { id: 'cat10', name: '10. Check Dams', group: 'major' },
+  { id: 'cat11', name: '11. Piling Works', group: 'major' },
+  { id: 'cat12', name: '12. Finished Slope Surfaces', group: 'major' },
+  { id: 'cat13', name: '13. Drainage Measures & Maintenance Access', group: 'major' },
+  { id: 'trial1', name: 'Site Trial 1: GFRP Soil Nail', group: 'trial' },
+  { id: 'trial2', name: 'Site Trial 2: Skin Wall with GGBS Concrete', group: 'trial' }
 ];
 
 const INITIAL_CATEGORY_DATA = {
@@ -864,157 +864,334 @@ function LoginScreen({ onLogin, showNotification, notification }) {
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    
     try {
       const userHash = await hashString(username);
       const passHash = await hashString(password);
-      
-      // "admin" / "123"
       if (
         userHash === '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918' && 
         passHash === 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3'
-      ) {
-        onLogin();
-      } else {
-        showNotification('Invalid username or password');
-      }
-    } catch (error) {
-      showNotification('Login error occurred');
-    }
+      ) { onLogin(); } else { showNotification('Invalid username or password'); }
+    } catch (error) { showNotification('Login error occurred'); }
     setIsLoading(false);
   };
 
+  const features = [
+    { icon: <HardHat className="h-6 w-6" />, title: '13 Work Categories', desc: 'Track materials across Soil Nails, Retaining Walls, Barriers, and more' },
+    { icon: <BarChart3 className="h-6 w-6" />, title: 'Real-time Analysis', desc: 'Per-category breakdowns, site trial reports, and energy source analysis' },
+    { icon: <Zap className="h-6 w-6" />, title: 'Energy Tracking', desc: 'Diesel, Petrol, Biofuel, Grid/BESS/EV electricity monitoring' },
+    { icon: <Cpu className="h-6 w-6" />, title: 'AI Forecasting', desc: 'Predict carbon targets with multi-parameter correlation engine' },
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
-      {notification && (
-        <div className="fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-md shadow-lg z-50 animate-fade-in border border-red-700">
-          {notification}
-        </div>
-      )}
-      <div className="bg-white max-w-md w-full p-8 rounded-xl shadow-2xl border border-slate-200">
-        <div className="text-center mb-8 flex flex-col items-center">
-          <div className="bg-emerald-100 p-4 rounded-full mb-4 shadow-inner">
-            <Leaf className="h-8 w-8 text-emerald-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-800">Carbon Inventory Login</h1>
-          <p className="text-slate-500 text-sm mt-2">Sign in to access project data</p>
-        </div>
-        
-        <form onSubmit={handleLogin} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <User className="h-5 w-5 text-slate-400" />
-              </div>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm bg-slate-50"
-                placeholder="Enter username"
-                required
-              />
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-slate-400" />
-              </div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm bg-slate-50"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-          </div>
-          
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors mt-2"
-          >
-            {isLoading ? 'Authenticating...' : 'Sign In'}
-          </button>
-        </form>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 text-white relative overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-float"></div>
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-teal-500/10 rounded-full blur-3xl"></div>
       </div>
+
+      {notification && (
+        <div className="fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg shadow-2xl z-50 animate-fade-in border border-red-500">{notification}</div>
+      )}
+
+      <header className="relative z-10 p-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-500/20 p-2.5 rounded-xl border border-emerald-500/30"><Leaf className="h-7 w-7 text-emerald-400" /></div>
+            <div>
+              <h1 className="text-lg font-bold text-white">LPMit Carbon Inventory</h1>
+              <p className="text-xs text-emerald-300/70 font-medium">CE 53/2022 (GE) — Slope Works</p>
+            </div>
+          </div>
+          <div className="hidden sm:flex items-center gap-1.5 bg-emerald-900/50 px-3 py-1.5 rounded-full border border-emerald-700/40 text-xs text-slate-400">
+            <div className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse"></div>System Online
+          </div>
+        </div>
+      </header>
+
+      <main className="relative z-10 max-w-7xl mx-auto px-6 pt-8 pb-20">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
+          <div className="lg:col-span-3 space-y-10">
+            <div className="animate-fade-in-up">
+              <div className="inline-flex items-center gap-2 bg-emerald-500/10 text-emerald-300 text-xs font-semibold px-3 py-1.5 rounded-full border border-emerald-500/20 mb-6">
+                <Activity className="h-3.5 w-3.5" /> Works Carbon Emission Portal
+              </div>
+              <h2 className="text-4xl sm:text-5xl font-black tracking-tight leading-[1.1] mb-5">
+                Carbon Emission<br/><span className="gradient-text">Tracking & Analysis</span>
+              </h2>
+              <p className="text-slate-400 text-base leading-relaxed max-w-lg">
+                Monitor, analyse, and forecast carbon emissions across 13 major work categories 
+                and 2 site trials. Real-time cloud sync with comprehensive resource breakdowns.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-in-up" style={{animationDelay: '0.15s'}}>
+              {features.map((f, i) => (
+                <div key={i} className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 hover:bg-white/10 hover:border-emerald-500/30 transition-all group">
+                  <div className="text-emerald-400 mb-3 group-hover:scale-110 transition-transform">{f.icon}</div>
+                  <h3 className="text-sm font-bold text-white mb-1">{f.title}</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-6 text-xs text-slate-500">
+              <div className="flex items-center gap-2"><div className="h-2 w-2 bg-emerald-500 rounded-full"></div>Firebase Synced</div>
+              <div className="flex items-center gap-2"><div className="h-2 w-2 bg-blue-500 rounded-full"></div>Excel Import/Export</div>
+              <div className="flex items-center gap-2"><div className="h-2 w-2 bg-amber-500 rounded-full"></div>15 Work Categories</div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-2 animate-fade-in-up" style={{animationDelay: '0.2s'}}>
+            <div className="bg-white/[0.07] backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl shadow-black/20">
+              <div className="text-center mb-7">
+                <div className="inline-flex bg-emerald-500/15 p-3.5 rounded-2xl border border-emerald-500/20 mb-4"><Lock className="h-6 w-6 text-emerald-400" /></div>
+                <h3 className="text-xl font-bold text-white">Sign In</h3>
+                <p className="text-sm text-slate-400 mt-1">Access the portal dashboard</p>
+              </div>
+              <form onSubmit={handleLogin} className="space-y-5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">Username</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
+                      placeholder="Enter username" required />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
+                      placeholder="••••••••" required />
+                  </div>
+                </div>
+                <button type="submit" disabled={isLoading}
+                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-900/30 transition-all text-sm disabled:opacity-50">
+                  {isLoading ? 'Authenticating...' : 'Sign In to Portal'}
+                </button>
+              </form>
+              <div className="mt-6 pt-5 border-t border-white/5 text-center">
+                <p className="text-[11px] text-slate-500">Landslip Prevention & Mitigation Programme</p>
+                <p className="text-[11px] text-slate-600 mt-1">AECOM Asia Company Limited</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer className="relative z-10 border-t border-white/5 py-6">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-slate-500">
+          <p>© 2026 Carbon Inventory Portal — CE 53/2022 (GE)</p>
+          <p>Built for Geotechnical Engineering Office</p>
+        </div>
+      </footer>
     </div>
   );
 }
 
 function AnalysisDashboard({ records }) {
-  const totals = records.reduce((acc, curr) => {
-    acc.concrete += Number(curr.massConcrete || 0) + Number(curr.reinforcedConcrete || 0) + Number(curr.namiConcrete || 0) + Number(curr.noFineConcrete || 0);
-    acc.steel += Number(curr.soilNailSteel || 0) + Number(curr.steelRebar || 0);
-    acc.electricity += Number(curr.electricity || 0) + Number(curr.bessElectricity || 0) + Number(curr.evElectricity || 0);
-    acc.diesel += Number(curr.diesel || 0);
-    acc.petrol += Number(curr.petrol || 0);
-    return acc;
-  }, { concrete: 0, steel: 0, electricity: 0, diesel: 0, petrol: 0 });
+  const [analysisView, setAnalysisView] = useState('overview');
 
-  const maxConcrete = Math.max(...records.map(r => Number(r.massConcrete || 0) + Number(r.reinforcedConcrete || 0) + Number(r.namiConcrete || 0) + Number(r.noFineConcrete || 0)), 1);
+  // Helper: aggregate a specific field across all categories for a record
+  const getRecordAgg = (record, field) => {
+    if (!record.categories) return Number(record[field] || 0);
+    return Object.values(record.categories).reduce((s, c) => s + Number(c[field] || 0), 0);
+  };
+
+  // Helper: aggregate a field for a specific category across all records
+  const getCatTotal = (catId, field) => {
+    return records.reduce((sum, r) => {
+      if (!r.categories || !r.categories[catId]) return sum;
+      return sum + Number(r.categories[catId][field] || 0);
+    }, 0);
+  };
+
+  // Grand totals across all records and categories
+  const grandTotals = records.reduce((acc, r) => {
+    const cats = r.categories ? Object.values(r.categories) : [r];
+    cats.forEach(c => {
+      acc.concrete += Number(c.massConcrete || 0) + Number(c.reinforcedConcrete || 0) + Number(c.namiConcrete || 0) + Number(c.noFineConcrete || 0);
+      acc.cement += Number(c.soilNailGrout || 0) + Number(c.cementGroutBackfill || 0);
+      acc.steel += Number(c.soilNailSteel || 0) + Number(c.steelRebar || 0);
+      acc.diesel += Number(c.diesel || 0);
+      acc.petrol += Number(c.petrol || 0);
+      acc.biofuel += Number(c.biofuel || 0);
+      acc.electricity += Number(c.electricity || 0);
+      acc.bessElectricity += Number(c.bessElectricity || 0);
+      acc.evElectricity += Number(c.evElectricity || 0);
+      acc.water += Number(c.water || 0);
+    });
+    return acc;
+  }, { concrete: 0, cement: 0, steel: 0, diesel: 0, petrol: 0, biofuel: 0, electricity: 0, bessElectricity: 0, evElectricity: 0, water: 0 });
+
+  const materialFields = [
+    { key: 'massConcrete', label: 'Mass Concrete', unit: 'm³' },
+    { key: 'reinforcedConcrete', label: 'Reinforced Concrete', unit: 'm³' },
+    { key: 'namiConcrete', label: 'Nami Concrete', unit: 'm³' },
+    { key: 'noFineConcrete', label: 'No-fine Concrete', unit: 'm³' },
+    { key: 'soilNailSteel', label: 'Solid Steel Bar', unit: 'kg' },
+    { key: 'steelRebar', label: 'Steel Rebar', unit: 'kg' },
+    { key: 'soilNailGrout', label: 'Cement Grout', unit: 'kg' },
+    { key: 'cementGroutBackfill', label: 'Cement Grout Backfill', unit: 'm³/kg' },
+    { key: 'recompactingSoil', label: 'Recompacting Soil', unit: 'm³' },
+  ];
+
+  const majorCats = WORK_CATEGORIES.filter(c => c.group === 'major');
+  const trialCats = WORK_CATEGORIES.filter(c => c.group === 'trial');
+
+  const tabs = [
+    { id: 'overview', label: 'Grand Totals', icon: <BarChart3 className="h-4 w-4" /> },
+    { id: 'byCategory', label: 'By Work Category', icon: <HardHat className="h-4 w-4" /> },
+    { id: 'siteTrials', label: 'Site Trials', icon: <Calculator className="h-4 w-4" /> },
+    { id: 'energy', label: 'Energy Breakdown', icon: <Zap className="h-4 w-4" /> },
+  ];
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2 border-b pb-4">
-          <BarChart3 className="h-6 w-6 text-emerald-600" />
-          Project Resource Analysis
-        </h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatCard title="Total Concrete (All Types)" value={totals.concrete.toFixed(2)} unit="m³" color="bg-blue-50 text-blue-700 border-blue-200" />
-          <StatCard title="Total Steel & Rebar" value={totals.steel.toFixed(2)} unit="kg" color="bg-slate-50 text-slate-700 border-slate-200" />
-          <StatCard title="Total Fuel (Diesel+Petrol)" value={(totals.diesel + totals.petrol).toFixed(2)} unit="Litres" color="bg-orange-50 text-orange-700 border-orange-200" />
-          <StatCard title="Total Electricity (Grid+BESS+EV)" value={totals.electricity.toFixed(2)} unit="kWh" color="bg-yellow-50 text-yellow-700 border-yellow-200" />
-        </div>
-
-        <h3 className="text-lg font-semibold text-slate-700 mb-4">Concrete Usage Trend</h3>
-        {records.length > 0 ? (
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 pt-10 flex items-end gap-2 h-64 overflow-x-auto">
-            
-            {records.map((record) => {
-              const val = record.categories ? Object.values(record.categories).reduce((s, c) => s + Number(c.massConcrete || 0) + Number(c.reinforcedConcrete || 0) + Number(c.namiConcrete || 0) + Number(c.noFineConcrete || 0), 0) : Number(record.massConcrete || 0) + Number(record.reinforcedConcrete || 0) + Number(record.namiConcrete || 0) + Number(record.noFineConcrete || 0);
-              const heightPercent = Math.max((val / maxConcrete) * 100, 5);
-
-              return (
-                <div key={record.monthYear} className="flex flex-col items-center flex-1 min-w-[60px] group">
-                  <div className="text-xs text-slate-500 mb-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white px-2 py-1 rounded shadow-sm">
-                    {val.toFixed(1)}m³
-                  </div>
-                  <div 
-                    className="w-full bg-emerald-500 hover:bg-emerald-400 rounded-t-sm transition-all"
-                    style={{ height: `${heightPercent}%` }}
-                  ></div>
-                  <div className="text-xs text-slate-600 mt-2 font-medium truncate w-full text-center">
-                    {record.monthYear.split('-').reverse().join('/')}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-slate-400 border border-dashed border-slate-200 rounded-lg">
-            No data available for trend analysis.
-          </div>
-        )}
+      {/* Analysis Tab Bar */}
+      <div className="flex flex-wrap gap-2">
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setAnalysisView(t.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${analysisView === t.id ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-white text-slate-600 border border-slate-200 hover:border-emerald-300 hover:text-emerald-700'}`}>
+            {t.icon}{t.label}
+          </button>
+        ))}
       </div>
+
+      {/* 3.6 — Grand Totals (whole site combined same materials) */}
+      {analysisView === 'overview' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2 pb-3 border-b">
+              <BarChart3 className="h-5 w-5 text-emerald-600" /> Whole Site — Total Material & Energy Usage
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <AnalysisCard label="Total Concrete" value={grandTotals.concrete} unit="m³" color="blue" />
+              <AnalysisCard label="Total Cement/Grout" value={grandTotals.cement} unit="kg" color="amber" />
+              <AnalysisCard label="Total Steel & Rebar" value={grandTotals.steel} unit="kg" color="slate" />
+              <AnalysisCard label="Grid Electricity" value={grandTotals.electricity} unit="kWh" color="yellow" />
+              <AnalysisCard label="BESS Electricity" value={grandTotals.bessElectricity} unit="kWh" color="teal" />
+              <AnalysisCard label="Diesel Fuel" value={grandTotals.diesel} unit="L" color="orange" />
+              <AnalysisCard label="Petrol" value={grandTotals.petrol} unit="L" color="red" />
+              <AnalysisCard label="Biofuel (B10+)" value={grandTotals.biofuel} unit="L" color="green" />
+              <AnalysisCard label="EV Electricity" value={grandTotals.evElectricity} unit="kWh" color="indigo" />
+              <AnalysisCard label="Fresh Water" value={grandTotals.water} unit="L" color="cyan" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3.1 — Accumulated material usage per work type */}
+      {analysisView === 'byCategory' && (
+        <div className="space-y-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b bg-slate-50"><h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><HardHat className="h-5 w-5 text-emerald-600" />Accumulated Material Usage — 13 Major Works</h2></div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold sticky left-0 bg-slate-50 z-10">Work Category</th>
+                    {materialFields.map(f => <th key={f.key} className="px-3 py-3 text-right font-semibold whitespace-nowrap">{f.label} ({f.unit})</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {majorCats.map(cat => (
+                    <tr key={cat.id} className="hover:bg-emerald-50/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-slate-800 sticky left-0 bg-white whitespace-nowrap">{cat.name}</td>
+                      {materialFields.map(f => <td key={f.key} className="px-3 py-3 text-right font-mono text-slate-600">{getCatTotal(cat.id, f.key).toFixed(1)}</td>)}
+                    </tr>
+                  ))}
+                  <tr className="bg-emerald-50 font-bold">
+                    <td className="px-4 py-3 text-emerald-800 sticky left-0 bg-emerald-50">TOTAL</td>
+                    {materialFields.map(f => <td key={f.key} className="px-3 py-3 text-right font-mono text-emerald-800">{majorCats.reduce((s, cat) => s + getCatTotal(cat.id, f.key), 0).toFixed(1)}</td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3.2 — Accumulated material usage for site trials */}
+      {analysisView === 'siteTrials' && (
+        <div className="space-y-4 animate-fade-in">
+          {trialCats.map(trial => (
+            <div key={trial.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="p-5 border-b bg-gradient-to-r from-indigo-50 to-white">
+                <h3 className="text-lg font-bold text-slate-800">{trial.name}</h3>
+              </div>
+              <div className="p-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {materialFields.map(f => {
+                  const val = getCatTotal(trial.id, f.key);
+                  return val > 0 ? <AnalysisCard key={f.key} label={f.label} value={val} unit={f.unit} color="indigo" /> : null;
+                })}
+                <AnalysisCard label="Diesel" value={getCatTotal(trial.id, 'diesel')} unit="L" color="orange" />
+                <AnalysisCard label="Biofuel (B10+)" value={getCatTotal(trial.id, 'biofuel')} unit="L" color="green" />
+                <AnalysisCard label="BESS Electricity" value={getCatTotal(trial.id, 'bessElectricity')} unit="kWh" color="teal" />
+                <AnalysisCard label="Grid Electricity" value={getCatTotal(trial.id, 'electricity')} unit="kWh" color="yellow" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 3.3/3.4/3.5 — Energy breakdown */}
+      {analysisView === 'energy' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h3 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2 pb-3 border-b"><Zap className="h-5 w-5 text-amber-500" />Construction Energy Sources</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <AnalysisCard label="Diesel Fuel" value={grandTotals.diesel} unit="L" color="orange" />
+              <AnalysisCard label="Petrol Fuel" value={grandTotals.petrol} unit="L" color="red" />
+              <AnalysisCard label="Biofuel (B5/B10+)" value={grandTotals.biofuel} unit="L" color="green" />
+              <AnalysisCard label="Grid Electricity" value={grandTotals.electricity} unit="kWh" color="yellow" />
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h3 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2 pb-3 border-b"><Truck className="h-5 w-5 text-blue-500" />Transportation Energy Sources</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <AnalysisCard label="Petrol (Contract Cars)" value={grandTotals.petrol} unit="L" color="red" />
+              <AnalysisCard label="EV Electricity" value={grandTotals.evElectricity} unit="kWh" color="indigo" />
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h3 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2 pb-3 border-b"><TrendingUp className="h-5 w-5 text-teal-500" />Site Trial Energy Sources</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {trialCats.map(t => (
+                <React.Fragment key={t.id}>
+                  <AnalysisCard label={`${t.name.split(':')[1]?.trim() || t.name} — Biofuel`} value={getCatTotal(t.id, 'biofuel')} unit="L" color="green" />
+                  <AnalysisCard label={`${t.name.split(':')[1]?.trim() || t.name} — BESS`} value={getCatTotal(t.id, 'bessElectricity')} unit="kWh" color="teal" />
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function StatCard({ title, value, unit, color }) {
+function AnalysisCard({ label, value, unit, color = 'slate' }) {
+  const colorMap = {
+    blue: 'bg-blue-50 text-blue-700 border-blue-200',
+    amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    slate: 'bg-slate-50 text-slate-700 border-slate-200',
+    yellow: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    teal: 'bg-teal-50 text-teal-700 border-teal-200',
+    orange: 'bg-orange-50 text-orange-700 border-orange-200',
+    red: 'bg-red-50 text-red-700 border-red-200',
+    green: 'bg-green-50 text-green-700 border-green-200',
+    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  };
   return (
-    <div className={`p-4 rounded-lg border ${color}`}>
-      <div className="text-xs font-semibold uppercase tracking-wider mb-1 opacity-80">{title}</div>
-      <div className="text-2xl font-bold flex items-baseline gap-1">
-        {value} <span className="text-sm font-medium opacity-70">{unit}</span>
+    <div className={`p-4 rounded-lg border ${colorMap[color] || colorMap.slate} card-hover`}>
+      <div className="text-xs font-semibold uppercase tracking-wider mb-1.5 opacity-75">{label}</div>
+      <div className="text-xl font-bold flex items-baseline gap-1">
+        {(value || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}
+        <span className="text-xs font-medium opacity-60">{unit}</span>
       </div>
     </div>
   );
