@@ -746,7 +746,7 @@ export default function App() {
                     <div>
                       <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Water Consumption</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        
+                        <InputField label="Fresh Water (Litre)" name="water" type="number" value={(formData.categories?.[activeWorkCat] || {}).water} onChange={handleFormChange} />
                       </div>
                     </div>
                   </div>
