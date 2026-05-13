@@ -39,42 +39,42 @@ const INITIAL_PROJECT_INFO = {
 };
 
 // Expanded to match the EXACT fields from the original Excel File
+
+export const WORK_CATEGORIES = [
+  { id: 'cat1', name: '1. Site Clearance' },
+  { id: 'cat2', name: '2. Earthworks' },
+  { id: 'cat3', name: '3. Soil Nails' },
+  { id: 'cat4', name: '4. Rock Dowels / Bolts' },
+  { id: 'cat5', name: '5. Retaining Walls' },
+  { id: 'cat6', name: '6. Skin Walls' },
+  { id: 'cat7', name: '7. Raft Foundations' },
+  { id: 'cat8', name: '8. Flexible Debris Resisting Barriers' },
+  { id: 'cat9', name: '9. Rigid Debris Resisting Barriers' },
+  { id: 'cat10', name: '10. Surface Drainage' },
+  { id: 'cat11', name: '11. Sub-surface Drainage' },
+  { id: 'cat12', name: '12. Rockfall Mitigation' },
+  { id: 'cat13', name: '13. Bio-engineering / Landscaping' },
+  { id: 'trial1', name: 'Site Trial 1: GFRP Soil Nail' },
+  { id: 'trial2', name: 'Site Trial 2: Skin Wall with GGBS Concrete' }
+];
+
+const INITIAL_CATEGORY_DATA = {
+  soilNailSteel: '', soilNailGrout: '', massConcrete: '', namiConcrete: '', noFineConcrete: '',
+  cementGroutBackfill: '', reinforcedConcrete: '', steelRebar: '', recompactingSoil: '',
+  diesel: '', biofuel: '', biofuelGrade: '', electricity: '', bessElectricity: '', water: '',
+  waste1Trips: '', waste1Location: '', waste1Distance: '', waste1Weight: '',
+  waste2Trips: '', waste2Location: '', waste2Distance: '', waste2Weight: '',
+  contractCarsNonElectric: '', petrol: '', contractCarsElectric: '', evElectricity: '', labourCount: ''
+};
+
 const INITIAL_FORM_DATA = {
   monthYear: '',
-  // Materials
-  soilNailSteel: '',
-  soilNailGrout: '',
-  massConcrete: '',
-  namiConcrete: '',
-  noFineConcrete: '',
-  cementGroutBackfill: '',
-  reinforcedConcrete: '',
-  steelRebar: '',
-  recompactingSoil: '',
-  // Site Operations (Energy & Utilities)
-  diesel: '',
-  biofuel: '',
-  biofuelGrade: '',
-  electricity: '',
-  bessElectricity: '',
-  water: '',
-  // Waste Disposal Stream 1
-  waste1Trips: '',
-  waste1Location: '',
-  waste1Distance: '',
-  waste1Weight: '',
-  // Waste Disposal Stream 2
-  waste2Trips: '',
-  waste2Location: '',
-  waste2Distance: '',
-  waste2Weight: '',
-  // Vehicles & Personnel
-  contractCarsNonElectric: '',
-  petrol: '',
-  contractCarsElectric: '',
-  evElectricity: '',
-  labourCount: ''
+  categories: WORK_CATEGORIES.reduce((acc, cat) => {
+    acc[cat.id] = { ...INITIAL_CATEGORY_DATA };
+    return acc;
+  }, {})
 };
+
 
 const firebaseConfig = JSON.parse(__firebase_config);
 const app = initializeApp(firebaseConfig);
@@ -87,7 +87,11 @@ export default function App() {
   const [records, setRecords] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
+  
+  const [activeWorkCat, setActiveWorkCat] = useState('cat1');
   const [activeTab, setActiveTab] = useState('materials');
+  const [selectedRecords, setSelectedRecords] = useState([]);
+
   const [notification, setNotification] = useState(null);
   const [user, setUser] = useState(null);
   
@@ -153,9 +157,24 @@ export default function App() {
     }
   };
 
+  
   const handleFormChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    if (e.target.name === 'monthYear') {
+      setFormData({ ...formData, monthYear: e.target.value });
+    } else {
+      setFormData(prev => {
+        const catData = prev.categories?.[activeWorkCat] || {};
+        return {
+          ...prev,
+          categories: {
+            ...prev.categories,
+            [activeWorkCat]: { ...catData, [e.target.name]: e.target.value }
+          }
+        };
+      });
+    }
   };
+
 
   const showNotification = (msg) => {
     setNotification(msg);
@@ -181,6 +200,35 @@ export default function App() {
     }
   };
 
+  
+  const toggleRecordSelect = (monthYear) => {
+    setSelectedRecords(prev => prev.includes(monthYear) ? prev.filter(id => id !== monthYear) : [...prev, monthYear]);
+  };
+  const toggleAllRecords = () => {
+    if (selectedRecords.length === records.length) setSelectedRecords([]);
+    else setSelectedRecords(records.map(r => r.monthYear));
+  };
+  const batchDelete = async () => {
+    if (!user || selectedRecords.length === 0) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedRecords.length} records?`)) return;
+    try {
+      for (const monthYear of selectedRecords) {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'records', monthYear));
+      }
+      setSelectedRecords([]);
+      showNotification(`Successfully deleted ${selectedRecords.length} records.`);
+    } catch (error) {
+      console.error(error);
+      showNotification('Failed to delete some records.');
+    }
+  };
+
+  
+  const getAggregated = (record, field) => {
+    if (!record.categories) return Number(record[field] || 0);
+    return Object.values(record.categories).reduce((sum, cat) => sum + Number(cat[field] || 0), 0);
+  };
+
   const deleteRecord = async (monthYear) => {
     if (!user) return;
     try {
@@ -191,12 +239,24 @@ export default function App() {
     }
   };
 
+  
   const editRecord = (record) => {
-    // Fill in missing default keys for older records that didn't have all expanded fields
-    const fullRecord = { ...INITIAL_FORM_DATA, ...record };
+    let fullRecord = { ...INITIAL_FORM_DATA, monthYear: record.monthYear };
+    if (record.categories) {
+      fullRecord.categories = { ...INITIAL_FORM_DATA.categories };
+      for (const catId of Object.keys(record.categories)) {
+        fullRecord.categories[catId] = { ...INITIAL_CATEGORY_DATA, ...record.categories[catId] };
+      }
+    } else {
+      // Legacy data
+      fullRecord.categories['cat1'] = { ...INITIAL_CATEGORY_DATA, ...record };
+    }
     setFormData(fullRecord);
+    setActiveWorkCat('cat1');
+    setActiveTab('materials');
     setIsModalOpen(true);
   };
+
 
   const exportData = () => {
     const exportObject = {
@@ -235,37 +295,49 @@ export default function App() {
     const wsInfo = window.XLSX.utils.aoa_to_sheet(wsInfoData);
 
     // Sheet 2: Monthly Data (Flattened for easy viewing)
-    const formattedRecords = records.map(r => ({
-      'Month / Year': r.monthYear,
-      'Solid Steel Bar (kg)': Number(r.soilNailSteel || 0),
-      'Cement Grout (kg)': Number(r.soilNailGrout || 0),
-      'Mass Concrete (m³)': Number(r.massConcrete || 0),
-      'Nami Concrete (m³)': Number(r.namiConcrete || 0),
-      'No-fine Concrete (m³)': Number(r.noFineConcrete || 0),
-      'Cement Grout Backfill (m³/kg)': Number(r.cementGroutBackfill || 0),
-      'Reinforced Concrete (m³)': Number(r.reinforcedConcrete || 0),
-      'Steel Rebar (kg)': Number(r.steelRebar || 0),
-      'Recompacting Soil (m³)': Number(r.recompactingSoil || 0),
-      'Diesel Fuel (L)': Number(r.diesel || 0),
-      'Biofuel (L)': Number(r.biofuel || 0),
-      'Biofuel Grade': r.biofuelGrade || '',
-      'Grid Electricity (kWh)': Number(r.electricity || 0),
-      'BESS Electricity (kWh)': Number(r.bessElectricity || 0),
-      'Fresh Water (L)': Number(r.water || 0),
-      'Waste Stream 1 - Trips': Number(r.waste1Trips || 0),
-      'Waste Stream 1 - Location': r.waste1Location || '',
-      'Waste Stream 1 - Distance (km)': Number(r.waste1Distance || 0),
-      'Waste Stream 1 - Weight (kg)': Number(r.waste1Weight || 0),
-      'Waste Stream 2 - Trips': Number(r.waste2Trips || 0),
-      'Waste Stream 2 - Location': r.waste2Location || '',
-      'Waste Stream 2 - Distance (km)': Number(r.waste2Distance || 0),
-      'Waste Stream 2 - Weight (kg)': Number(r.waste2Weight || 0),
-      'Non-Electric Contract Cars': Number(r.contractCarsNonElectric || 0),
-      'Petrol (L)': Number(r.petrol || 0),
-      'Electric Contract Cars': Number(r.contractCarsElectric || 0),
-      'EV Electricity (kWh)': Number(r.evElectricity || 0),
-      'Average Labour per Day': Number(r.labourCount || 0)
-    }));
+    
+    const formattedRecords = records.map(r => {
+      const agg = { ...INITIAL_CATEGORY_DATA };
+      if (r.categories) {
+        Object.values(r.categories).forEach(cat => {
+          Object.keys(cat).forEach(k => { agg[k] = Number(agg[k] || 0) + Number(cat[k] || 0); });
+        });
+      } else {
+        Object.keys(agg).forEach(k => { agg[k] = Number(r[k] || 0); });
+      }
+      return {
+        'Month / Year': r.monthYear,
+        'Solid Steel Bar (kg)': agg.soilNailSteel,
+        'Cement Grout (kg)': agg.soilNailGrout,
+        'Mass Concrete (m³)': agg.massConcrete,
+        'Nami Concrete (m³)': agg.namiConcrete,
+        'No-fine Concrete (m³)': agg.noFineConcrete,
+        'Cement Grout Backfill (m³/kg)': agg.cementGroutBackfill,
+        'Reinforced Concrete (m³)': agg.reinforcedConcrete,
+        'Steel Rebar (kg)': agg.steelRebar,
+        'Recompacting Soil (m³)': agg.recompactingSoil,
+        'Diesel Fuel (L)': agg.diesel,
+        'Biofuel (L)': agg.biofuel,
+        'Biofuel Grade': agg.biofuelGrade || '',
+        'Grid Electricity (kWh)': agg.electricity,
+        'BESS Electricity (kWh)': agg.bessElectricity,
+        'Fresh Water (L)': agg.water,
+        'Waste Stream 1 - Trips': agg.waste1Trips,
+        'Waste Stream 1 - Location': r.waste1Location || '',
+        'Waste Stream 1 - Distance (km)': agg.waste1Distance,
+        'Waste Stream 1 - Weight (kg)': agg.waste1Weight,
+        'Waste Stream 2 - Trips': agg.waste2Trips,
+        'Waste Stream 2 - Location': r.waste2Location || '',
+        'Waste Stream 2 - Distance (km)': agg.waste2Distance,
+        'Waste Stream 2 - Weight (kg)': agg.waste2Weight,
+        'Non-Electric Contract Cars': agg.contractCarsNonElectric,
+        'Petrol (L)': agg.petrol,
+        'Electric Contract Cars': agg.contractCarsElectric,
+        'EV Electricity (kWh)': agg.evElectricity,
+        'Average Labour per Day': agg.labourCount
+      };
+    });
+
 
     const wsData = window.XLSX.utils.json_to_sheet(formattedRecords);
 
@@ -490,13 +562,21 @@ export default function App() {
                   <Building2 className="h-5 w-5 text-emerald-600" />
                   Monthly Carbon Emission Data
                 </h2>
-                <button 
-                  onClick={() => { setFormData(INITIAL_FORM_DATA); setIsModalOpen(true); }}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium shadow-sm"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Monthly Record
-                </button>
+                
+                <div className="flex gap-2">
+                  {selectedRecords.length > 0 && (
+                    <button onClick={batchDelete} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm">
+                      Delete Selected ({selectedRecords.length})
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => { setFormData(INITIAL_FORM_DATA); setIsModalOpen(true); }}
+                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium shadow-sm"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Monthly Record
+                  </button>
+                </div>
               </div>
 
               {records.length === 0 ? (
@@ -509,8 +589,13 @@ export default function App() {
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
                   <table className="min-w-full divide-y divide-slate-200 text-sm">
                     <thead className="bg-slate-50 text-slate-600">
+                      
                       <tr>
+                        <th className="px-4 py-3 text-left w-10">
+                          <input type="checkbox" checked={records.length > 0 && selectedRecords.length === records.length} onChange={toggleAllRecords} className="rounded text-emerald-600 focus:ring-emerald-500" />
+                        </th>
                         <th className="px-6 py-3 text-left font-semibold">Month</th>
+
                         <th className="px-6 py-3 text-left font-semibold">Total Concrete (m³)</th>
                         <th className="px-6 py-3 text-left font-semibold">Total Steel (kg)</th>
                         <th className="px-6 py-3 text-left font-semibold">Diesel & Biofuel (L)</th>
@@ -520,16 +605,23 @@ export default function App() {
                     </thead>
                     <tbody className="bg-white divide-y divide-slate-200">
                       {records.map((record) => (
-                        <tr key={record.monthYear} className="hover:bg-slate-50 transition-colors">
+                        
+                        <tr key={record.monthYear} className={`transition-colors ${selectedRecords.includes(record.monthYear) ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}>
+                          <td className="px-4 py-4">
+                            <input type="checkbox" checked={selectedRecords.includes(record.monthYear)} onChange={() => toggleRecordSelect(record.monthYear)} className="rounded text-emerald-600 focus:ring-emerald-500" />
+                          </td>
                           <td className="px-6 py-4 font-medium text-slate-900">{record.monthYear}</td>
+
                           <td className="px-6 py-4">
-                            {(Number(record.massConcrete || 0) + Number(record.reinforcedConcrete || 0) + Number(record.namiConcrete || 0) + Number(record.noFineConcrete || 0)).toFixed(2)}
+                            
+                            {(getAggregated(record, 'massConcrete') + getAggregated(record, 'reinforcedConcrete') + getAggregated(record, 'namiConcrete') + getAggregated(record, 'noFineConcrete')).toFixed(2)}
                           </td>
                           <td className="px-6 py-4">
-                            {(Number(record.soilNailSteel || 0) + Number(record.steelRebar || 0)).toFixed(2)}
+                            {(getAggregated(record, 'soilNailSteel') + getAggregated(record, 'steelRebar')).toFixed(2)}
                           </td>
-                          <td className="px-6 py-4">{(Number(record.diesel || 0) + Number(record.biofuel || 0)).toFixed(2)}</td>
-                          <td className="px-6 py-4">{(Number(record.electricity || 0) + Number(record.bessElectricity || 0) + Number(record.evElectricity || 0)).toFixed(2)}</td>
+                          <td className="px-6 py-4">{(getAggregated(record, 'diesel') + getAggregated(record, 'biofuel')).toFixed(2)}</td>
+                          <td className="px-6 py-4">{(getAggregated(record, 'electricity') + getAggregated(record, 'bessElectricity') + getAggregated(record, 'evElectricity')).toFixed(2)}</td>
+
                           <td className="px-6 py-4 text-right">
                             <button onClick={() => editRecord(record)} className="text-blue-600 hover:text-blue-800 font-medium mr-4">Edit</button>
                             <button onClick={() => deleteRecord(record.monthYear)} className="text-red-600 hover:text-red-800 font-medium">Delete</button>
@@ -563,49 +655,65 @@ export default function App() {
             {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-0 sm:flex">
               
+              
               {/* Sidebar Tabs */}
-              <div className="w-full sm:w-64 bg-slate-50 border-r border-slate-200 flex flex-row sm:flex-col p-2 sm:p-4 gap-2 overflow-x-auto sm:overflow-visible">
-                <TabButton active={activeTab === 'materials'} onClick={() => setActiveTab('materials')} icon={<HardHat />} label="Materials" />
-                <TabButton active={activeTab === 'operations'} onClick={() => setActiveTab('operations')} icon={<Zap />} label="Energy & Utilities" />
-                <TabButton active={activeTab === 'transport'} onClick={() => setActiveTab('transport')} icon={<Truck />} label="Waste & Transport" />
+              <div className="w-full sm:w-64 bg-slate-50 border-r border-slate-200 flex flex-col p-2 overflow-y-auto">
+                {WORK_CATEGORIES.map(cat => (
+                  <button 
+                    key={cat.id} 
+                    onClick={() => setActiveWorkCat(cat.id)}
+                    className={`w-full text-left px-3 py-2 text-sm rounded mb-1 transition-colors ${activeWorkCat === cat.id ? 'bg-emerald-600 text-white font-medium shadow' : 'text-slate-600 hover:bg-slate-200'}`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
               </div>
 
               {/* Form Content */}
-              <div className="flex-1 p-6 bg-white">
-                
-                <div className="mb-8 max-w-sm">
+              <div className="flex-1 p-6 bg-white overflow-y-auto">
+                <div className="mb-6 max-w-sm">
                   <InputField label="Record Month / Year *" name="monthYear" type="month" value={formData.monthYear} onChange={handleFormChange} required />
                 </div>
+                
+                <h3 className="text-xl font-bold mb-4 text-slate-800 pb-2 border-b">{WORK_CATEGORIES.find(c => c.id === activeWorkCat)?.name}</h3>
+                
+                <div className="flex flex-wrap gap-2 mb-6">
+                  <TabButton active={activeTab === 'materials'} onClick={() => setActiveTab('materials')} icon={<HardHat />} label="Materials" />
+                  <TabButton active={activeTab === 'operations'} onClick={() => setActiveTab('operations')} icon={<Zap />} label="Energy" />
+                  <TabButton active={activeTab === 'water'} onClick={() => setActiveTab('water')} icon={<Leaf />} label="Water" />
+                  <TabButton active={activeTab === 'transport'} onClick={() => setActiveTab('transport')} icon={<Truck />} label="Waste & Transport" />
+                </div>
+
 
                 {activeTab === 'materials' && (
                   <div className="space-y-8 animate-fade-in">
                     <div>
                       <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Soil Nails</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Solid Steel Bar Weight (kg)" name="soilNailSteel" type="number" value={formData.soilNailSteel} onChange={handleFormChange} />
-                        <InputField label="Cement Grout Weight (kg)" name="soilNailGrout" type="number" value={formData.soilNailGrout} onChange={handleFormChange} />
+                        <InputField label="Solid Steel Bar Weight (kg)" name="soilNailSteel" type="number" value={(formData.categories?.[activeWorkCat] || {}).soilNailSteel} onChange={handleFormChange} />
+                        <InputField label="Cement Grout Weight (kg)" name="soilNailGrout" type="number" value={(formData.categories?.[activeWorkCat] || {}).soilNailGrout} onChange={handleFormChange} />
                       </div>
                     </div>
                     <div>
                       <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Concrete & Cementitious Materials</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Mass Concrete Backfilling (m³)" name="massConcrete" type="number" value={formData.massConcrete} onChange={handleFormChange} />
-                        <InputField label="Nami Self-Compacting Material Backfilling (m³)" name="namiConcrete" type="number" value={formData.namiConcrete} onChange={handleFormChange} />
-                        <InputField label="No-fine Concrete (m³)" name="noFineConcrete" type="number" value={formData.noFineConcrete} onChange={handleFormChange} />
-                        <InputField label="Cement Grout Backfilling (m³/kg)" name="cementGroutBackfill" type="number" value={formData.cementGroutBackfill} onChange={handleFormChange} />
-                        <InputField label="Reinforced Concrete (m³)" name="reinforcedConcrete" type="number" value={formData.reinforcedConcrete} onChange={handleFormChange} />
+                        <InputField label="Mass Concrete Backfilling (m³)" name="massConcrete" type="number" value={(formData.categories?.[activeWorkCat] || {}).massConcrete} onChange={handleFormChange} />
+                        <InputField label="Nami Self-Compacting Material Backfilling (m³)" name="namiConcrete" type="number" value={(formData.categories?.[activeWorkCat] || {}).namiConcrete} onChange={handleFormChange} />
+                        <InputField label="No-fine Concrete (m³)" name="noFineConcrete" type="number" value={(formData.categories?.[activeWorkCat] || {}).noFineConcrete} onChange={handleFormChange} />
+                        <InputField label="Cement Grout Backfilling (m³/kg)" name="cementGroutBackfill" type="number" value={(formData.categories?.[activeWorkCat] || {}).cementGroutBackfill} onChange={handleFormChange} />
+                        <InputField label="Reinforced Concrete (m³)" name="reinforcedConcrete" type="number" value={(formData.categories?.[activeWorkCat] || {}).reinforcedConcrete} onChange={handleFormChange} />
                       </div>
                     </div>
                     <div>
                       <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Steel & Rebar</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Steel Rebar Weight (kg)" name="steelRebar" type="number" value={formData.steelRebar} onChange={handleFormChange} />
+                        <InputField label="Steel Rebar Weight (kg)" name="steelRebar" type="number" value={(formData.categories?.[activeWorkCat] || {}).steelRebar} onChange={handleFormChange} />
                       </div>
                     </div>
                     <div>
                       <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Earthworks</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Recompacting Existing Excavated Soil (m³)" name="recompactingSoil" type="number" value={formData.recompactingSoil} onChange={handleFormChange} />
+                        <InputField label="Recompacting Existing Excavated Soil (m³)" name="recompactingSoil" type="number" value={(formData.categories?.[activeWorkCat] || {}).recompactingSoil} onChange={handleFormChange} />
                       </div>
                     </div>
                   </div>
@@ -616,17 +724,29 @@ export default function App() {
                     <div>
                       <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Fuel Consumptions</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Diesel Fuel (Litre)" name="diesel" type="number" value={formData.diesel} onChange={handleFormChange} />
-                        <InputField label="Biofuel - B10 or higher (Litre)" name="biofuel" type="number" value={formData.biofuel} onChange={handleFormChange} />
-                        <InputField label="Grade of Biofuel (Specify)" name="biofuelGrade" type="text" value={formData.biofuelGrade} onChange={handleFormChange} placeholder="e.g. B100" />
+                        <InputField label="Diesel Fuel (Litre)" name="diesel" type="number" value={(formData.categories?.[activeWorkCat] || {}).diesel} onChange={handleFormChange} />
+                        <InputField label="Biofuel - B10 or higher (Litre)" name="biofuel" type="number" value={(formData.categories?.[activeWorkCat] || {}).biofuel} onChange={handleFormChange} />
+                        <InputField label="Grade of Biofuel (Specify)" name="biofuelGrade" type="text" value={(formData.categories?.[activeWorkCat] || {}).biofuelGrade} onChange={handleFormChange} placeholder="e.g. B100" />
                       </div>
                     </div>
                     <div>
-                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Electricity & Water Consumptions</h3>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Electricity Consumptions</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Grid Electricity (kWh)" name="electricity" type="number" value={formData.electricity} onChange={handleFormChange} />
-                        <InputField label="Electricity via BESS (kWh)" name="bessElectricity" type="number" value={formData.bessElectricity} onChange={handleFormChange} />
-                        <InputField label="Fresh Water (Litre)" name="water" type="number" value={formData.water} onChange={handleFormChange} />
+                        <InputField label="Grid Electricity (kWh)" name="electricity" type="number" value={(formData.categories?.[activeWorkCat] || {}).electricity} onChange={handleFormChange} />
+                        <InputField label="Electricity via BESS (kWh)" name="bessElectricity" type="number" value={(formData.categories?.[activeWorkCat] || {}).bessElectricity} onChange={handleFormChange} />
+                        
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                
+                {activeTab === 'water' && (
+                  <div className="space-y-8 animate-fade-in">
+                    <div>
+                      <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Water Consumption</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        
                       </div>
                     </div>
                   </div>
@@ -637,34 +757,34 @@ export default function App() {
                     <div>
                       <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Waste Disposal (Stream 1)</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Total no. of trips" name="waste1Trips" type="number" value={formData.waste1Trips} onChange={handleFormChange} />
-                        <InputField label="Location of disposal" name="waste1Location" type="text" value={formData.waste1Location} onChange={handleFormChange} />
-                        <InputField label="Travel distance to site (km)" name="waste1Distance" type="number" value={formData.waste1Distance} onChange={handleFormChange} />
-                        <InputField label="Total weight (kg)" name="waste1Weight" type="number" value={formData.waste1Weight} onChange={handleFormChange} />
+                        <InputField label="Total no. of trips" name="waste1Trips" type="number" value={(formData.categories?.[activeWorkCat] || {}).waste1Trips} onChange={handleFormChange} />
+                        <InputField label="Location of disposal" name="waste1Location" type="text" value={(formData.categories?.[activeWorkCat] || {}).waste1Location} onChange={handleFormChange} />
+                        <InputField label="Travel distance to site (km)" name="waste1Distance" type="number" value={(formData.categories?.[activeWorkCat] || {}).waste1Distance} onChange={handleFormChange} />
+                        <InputField label="Total weight (kg)" name="waste1Weight" type="number" value={(formData.categories?.[activeWorkCat] || {}).waste1Weight} onChange={handleFormChange} />
                       </div>
                     </div>
                     <div>
                       <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Waste Disposal (Stream 2)</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Total no. of trips" name="waste2Trips" type="number" value={formData.waste2Trips} onChange={handleFormChange} />
-                        <InputField label="Location of disposal" name="waste2Location" type="text" value={formData.waste2Location} onChange={handleFormChange} />
-                        <InputField label="Travel distance to site (km)" name="waste2Distance" type="number" value={formData.waste2Distance} onChange={handleFormChange} />
-                        <InputField label="Total weight (kg)" name="waste2Weight" type="number" value={formData.waste2Weight} onChange={handleFormChange} />
+                        <InputField label="Total no. of trips" name="waste2Trips" type="number" value={(formData.categories?.[activeWorkCat] || {}).waste2Trips} onChange={handleFormChange} />
+                        <InputField label="Location of disposal" name="waste2Location" type="text" value={(formData.categories?.[activeWorkCat] || {}).waste2Location} onChange={handleFormChange} />
+                        <InputField label="Travel distance to site (km)" name="waste2Distance" type="number" value={(formData.categories?.[activeWorkCat] || {}).waste2Distance} onChange={handleFormChange} />
+                        <InputField label="Total weight (kg)" name="waste2Weight" type="number" value={(formData.categories?.[activeWorkCat] || {}).waste2Weight} onChange={handleFormChange} />
                       </div>
                     </div>
                     <div>
                       <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Contract Vehicles</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="No. of Non-Electric Contract Cars" name="contractCarsNonElectric" type="number" value={formData.contractCarsNonElectric} onChange={handleFormChange} />
-                        <InputField label="Consumption of Petrol (Litre)" name="petrol" type="number" value={formData.petrol} onChange={handleFormChange} />
-                        <InputField label="No. of Electric Contract Cars" name="contractCarsElectric" type="number" value={formData.contractCarsElectric} onChange={handleFormChange} />
-                        <InputField label="Electric Consumption (kWh)" name="evElectricity" type="number" value={formData.evElectricity} onChange={handleFormChange} />
+                        <InputField label="No. of Non-Electric Contract Cars" name="contractCarsNonElectric" type="number" value={(formData.categories?.[activeWorkCat] || {}).contractCarsNonElectric} onChange={handleFormChange} />
+                        <InputField label="Consumption of Petrol (Litre)" name="petrol" type="number" value={(formData.categories?.[activeWorkCat] || {}).petrol} onChange={handleFormChange} />
+                        <InputField label="No. of Electric Contract Cars" name="contractCarsElectric" type="number" value={(formData.categories?.[activeWorkCat] || {}).contractCarsElectric} onChange={handleFormChange} />
+                        <InputField label="Electric Consumption (kWh)" name="evElectricity" type="number" value={(formData.categories?.[activeWorkCat] || {}).evElectricity} onChange={handleFormChange} />
                       </div>
                     </div>
                     <div>
                       <h3 className="text-md font-semibold text-slate-700 mb-4 border-b pb-2">Site Personnel</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputField label="Average no. of labour on site per day" name="labourCount" type="number" value={formData.labourCount} onChange={handleFormChange} />
+                        <InputField label="Average no. of labour on site per day" name="labourCount" type="number" value={(formData.categories?.[activeWorkCat] || {}).labourCount} onChange={handleFormChange} />
                       </div>
                     </div>
                   </div>
@@ -858,9 +978,11 @@ function AnalysisDashboard({ records }) {
         <h3 className="text-lg font-semibold text-slate-700 mb-4">Concrete Usage Trend</h3>
         {records.length > 0 ? (
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 pt-10 flex items-end gap-2 h-64 overflow-x-auto">
+            
             {records.map((record) => {
-              const val = Number(record.massConcrete || 0) + Number(record.reinforcedConcrete || 0) + Number(record.namiConcrete || 0) + Number(record.noFineConcrete || 0);
+              const val = record.categories ? Object.values(record.categories).reduce((s, c) => s + Number(c.massConcrete || 0) + Number(c.reinforcedConcrete || 0) + Number(c.namiConcrete || 0) + Number(c.noFineConcrete || 0), 0) : Number(record.massConcrete || 0) + Number(record.reinforcedConcrete || 0) + Number(record.namiConcrete || 0) + Number(record.noFineConcrete || 0);
               const heightPercent = Math.max((val / maxConcrete) * 100, 5);
+
               return (
                 <div key={record.monthYear} className="flex flex-col items-center flex-1 min-w-[60px] group">
                   <div className="text-xs text-slate-500 mb-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white px-2 py-1 rounded shadow-sm">
