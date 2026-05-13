@@ -68,7 +68,10 @@ const INITIAL_CATEGORY_DATA = {
 };
 
 const INITIAL_FORM_DATA = {
+  id: '',
   monthYear: '',
+  featureNo: '',
+  featureType: 'Soil Cut',
   categories: WORK_CATEGORIES.reduce((acc, cat) => {
     acc[cat.id] = { ...INITIAL_CATEGORY_DATA };
     return acc;
@@ -159,8 +162,8 @@ export default function App() {
 
   
   const handleFormChange = (e) => {
-    if (e.target.name === 'monthYear') {
-      setFormData({ ...formData, monthYear: e.target.value });
+    if (['monthYear', 'featureNo', 'featureType'].includes(e.target.name)) {
+      setFormData({ ...formData, [e.target.name]: e.target.value });
     } else {
       setFormData(prev => {
         const catData = prev.categories?.[activeWorkCat] || {};
@@ -190,7 +193,9 @@ export default function App() {
     if (!user) return;
 
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'records', formData.monthYear), formData);
+      const recordId = formData.id || (formData.featureNo ? `${formData.monthYear}_${formData.featureNo.replace(/[^a-zA-Z0-9]/g, '_')}` : formData.monthYear);
+      const dataToSave = { ...formData, id: recordId };
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'records', recordId), dataToSave);
       setIsModalOpen(false);
       setFormData(INITIAL_FORM_DATA);
       showNotification('Record saved to cloud successfully.');
@@ -201,19 +206,19 @@ export default function App() {
   };
 
   
-  const toggleRecordSelect = (monthYear) => {
-    setSelectedRecords(prev => prev.includes(monthYear) ? prev.filter(id => id !== monthYear) : [...prev, monthYear]);
+  const toggleRecordSelect = (id) => {
+    setSelectedRecords(prev => prev.includes(id) ? prev.filter(selectedId => selectedId !== id) : [...prev, id]);
   };
   const toggleAllRecords = () => {
     if (selectedRecords.length === records.length) setSelectedRecords([]);
-    else setSelectedRecords(records.map(r => r.monthYear));
+    else setSelectedRecords(records.map(r => r.id || r.monthYear));
   };
   const batchDelete = async () => {
     if (!user || selectedRecords.length === 0) return;
     if (!window.confirm(`Are you sure you want to delete ${selectedRecords.length} records?`)) return;
     try {
-      for (const monthYear of selectedRecords) {
-        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'records', monthYear));
+      for (const id of selectedRecords) {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'records', id));
       }
       setSelectedRecords([]);
       showNotification(`Successfully deleted ${selectedRecords.length} records.`);
@@ -229,10 +234,10 @@ export default function App() {
     return Object.values(record.categories).reduce((sum, cat) => sum + Number(cat[field] || 0), 0);
   };
 
-  const deleteRecord = async (monthYear) => {
+  const deleteRecord = async (id) => {
     if (!user) return;
     try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'records', monthYear));
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'records', id));
       showNotification('Record deleted from cloud.');
     } catch (error) {
       console.error("Error deleting record:", error);
@@ -241,7 +246,7 @@ export default function App() {
 
   
   const editRecord = (record) => {
-    let fullRecord = { ...INITIAL_FORM_DATA, monthYear: record.monthYear };
+    let fullRecord = { ...INITIAL_FORM_DATA, ...record };
     if (record.categories) {
       fullRecord.categories = { ...INITIAL_FORM_DATA.categories };
       for (const catId of Object.keys(record.categories)) {
@@ -604,13 +609,17 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-slate-200">
-                      {records.map((record) => (
-                        
-                        <tr key={record.monthYear} className={`transition-colors ${selectedRecords.includes(record.monthYear) ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}>
+                      {records.map((record) => {
+                        const recId = record.id || record.monthYear;
+                        return (
+                        <tr key={recId} className={`transition-colors ${selectedRecords.includes(recId) ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}>
                           <td className="px-4 py-4">
-                            <input type="checkbox" checked={selectedRecords.includes(record.monthYear)} onChange={() => toggleRecordSelect(record.monthYear)} className="rounded text-emerald-600 focus:ring-emerald-500" />
+                            <input type="checkbox" checked={selectedRecords.includes(recId)} onChange={() => toggleRecordSelect(recId)} className="rounded text-emerald-600 focus:ring-emerald-500" />
                           </td>
-                          <td className="px-6 py-4 font-medium text-slate-900">{record.monthYear}</td>
+                          <td className="px-6 py-4 font-medium text-slate-900">
+                            {record.monthYear}
+                            {record.featureNo && <div className="text-xs text-slate-500 font-normal">{record.featureNo} ({record.featureType})</div>}
+                          </td>
 
                           <td className="px-6 py-4">
                             
@@ -624,10 +633,11 @@ export default function App() {
 
                           <td className="px-6 py-4 text-right">
                             <button onClick={() => editRecord(record)} className="text-blue-600 hover:text-blue-800 font-medium mr-4">Edit</button>
-                            <button onClick={() => deleteRecord(record.monthYear)} className="text-red-600 hover:text-red-800 font-medium">Delete</button>
+                            <button onClick={() => deleteRecord(recId)} className="text-red-600 hover:text-red-800 font-medium">Delete</button>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -671,8 +681,19 @@ export default function App() {
 
               {/* Form Content */}
               <div className="flex-1 p-6 bg-white overflow-y-auto">
-                <div className="mb-6 max-w-sm">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <InputField label="Record Month / Year *" name="monthYear" type="month" value={formData.monthYear} onChange={handleFormChange} required />
+                  <InputField label="Feature No." name="featureNo" type="text" value={formData.featureNo} onChange={handleFormChange} placeholder="e.g. 11NW-A/FR1" />
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Feature Type</label>
+                    <select name="featureType" value={formData.featureType} onChange={handleFormChange} className="block w-full py-2 px-3 bg-slate-50 border border-slate-300 rounded-md shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm">
+                      <option value="Soil Cut">Soil Cut</option>
+                      <option value="Rock Cut">Rock Cut</option>
+                      <option value="Retaining Wall">Retaining Wall</option>
+                      <option value="Fill Slope">Fill Slope</option>
+                      <option value="Natural Hillside">Natural Hillside</option>
+                    </select>
+                  </div>
                 </div>
                 
                 <h3 className="text-xl font-bold mb-4 text-slate-800 pb-2 border-b">{WORK_CATEGORIES.find(c => c.id === activeWorkCat)?.name}</h3>
@@ -1041,9 +1062,27 @@ function AnalysisDashboard({ records }) {
   const majorCats = WORK_CATEGORIES.filter(c => c.group === 'major');
   const trialCats = WORK_CATEGORIES.filter(c => c.group === 'trial');
 
+  const getFeatureTypeTotal = (type, field) => {
+    return records.reduce((sum, r) => {
+      if ((r.featureType || 'Soil Cut') !== type) return sum;
+      return sum + getRecordAgg(r, field);
+    }, 0);
+  };
+  const featureTypes = [...new Set(records.map(r => r.featureType || 'Soil Cut'))];
+
+  const getFeatureNoTotal = (fno, field) => {
+    return records.reduce((sum, r) => {
+      if ((r.featureNo || 'General Site') !== fno) return sum;
+      return sum + getRecordAgg(r, field);
+    }, 0);
+  };
+  const featureNos = [...new Set(records.map(r => r.featureNo || 'General Site'))];
+
   const tabs = [
     { id: 'overview', label: 'Grand Totals', icon: <BarChart3 className="h-4 w-4" /> },
     { id: 'byCategory', label: 'By Work Category', icon: <HardHat className="h-4 w-4" /> },
+    { id: 'byFeatureType', label: 'By Feature Type', icon: <Building2 className="h-4 w-4" /> },
+    { id: 'byFeatureNo', label: 'By Feature No.', icon: <Target className="h-4 w-4" /> },
     { id: 'siteTrials', label: 'Site Trials', icon: <Calculator className="h-4 w-4" /> },
     { id: 'energy', label: 'Energy Breakdown', icon: <Zap className="h-4 w-4" /> },
   ];
@@ -1106,6 +1145,68 @@ function AnalysisDashboard({ records }) {
                   <tr className="bg-emerald-50 font-bold">
                     <td className="px-4 py-3 text-emerald-800 sticky left-0 bg-emerald-50">TOTAL</td>
                     {materialFields.map(f => <td key={f.key} className="px-3 py-3 text-right font-mono text-emerald-800">{majorCats.reduce((s, cat) => s + getCatTotal(cat.id, f.key), 0).toFixed(1)}</td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Accumulated material usage per feature type */}
+      {analysisView === 'byFeatureType' && (
+        <div className="space-y-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b bg-slate-50"><h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Building2 className="h-5 w-5 text-emerald-600" />Accumulated Material Usage — By Feature Type</h2></div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold sticky left-0 bg-slate-50 z-10">Feature Type</th>
+                    {materialFields.map(f => <th key={f.key} className="px-3 py-3 text-right font-semibold whitespace-nowrap">{f.label} ({f.unit})</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {featureTypes.map(type => (
+                    <tr key={type} className="hover:bg-emerald-50/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-slate-800 sticky left-0 bg-white whitespace-nowrap">{type}</td>
+                      {materialFields.map(f => <td key={f.key} className="px-3 py-3 text-right font-mono text-slate-600">{getFeatureTypeTotal(type, f.key).toFixed(1)}</td>)}
+                    </tr>
+                  ))}
+                  <tr className="bg-emerald-50 font-bold">
+                    <td className="px-4 py-3 text-emerald-800 sticky left-0 bg-emerald-50">TOTAL</td>
+                    {materialFields.map(f => <td key={f.key} className="px-3 py-3 text-right font-mono text-emerald-800">{featureTypes.reduce((s, type) => s + getFeatureTypeTotal(type, f.key), 0).toFixed(1)}</td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Accumulated material usage per feature no */}
+      {analysisView === 'byFeatureNo' && (
+        <div className="space-y-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b bg-slate-50"><h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Target className="h-5 w-5 text-emerald-600" />Accumulated Material Usage — By Feature No.</h2></div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold sticky left-0 bg-slate-50 z-10">Feature No.</th>
+                    {materialFields.map(f => <th key={f.key} className="px-3 py-3 text-right font-semibold whitespace-nowrap">{f.label} ({f.unit})</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {featureNos.map(fno => (
+                    <tr key={fno} className="hover:bg-emerald-50/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-slate-800 sticky left-0 bg-white whitespace-nowrap">{fno}</td>
+                      {materialFields.map(f => <td key={f.key} className="px-3 py-3 text-right font-mono text-slate-600">{getFeatureNoTotal(fno, f.key).toFixed(1)}</td>)}
+                    </tr>
+                  ))}
+                  <tr className="bg-emerald-50 font-bold">
+                    <td className="px-4 py-3 text-emerald-800 sticky left-0 bg-emerald-50">TOTAL</td>
+                    {materialFields.map(f => <td key={f.key} className="px-3 py-3 text-right font-mono text-emerald-800">{featureNos.reduce((s, fno) => s + getFeatureNoTotal(fno, f.key), 0).toFixed(1)}</td>)}
                   </tr>
                 </tbody>
               </table>
